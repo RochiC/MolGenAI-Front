@@ -1,257 +1,359 @@
-// ====== Referencias ======
-const input = document.getElementById("moleculas-input");
-const boton = document.getElementById("generar");
+// moleculas.js - API Integration for MolGenAI con animaciones mejoradas
 
-// ====== Util ======
-const esc = (s) => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+// API Configuration
+const API_URL = 'http://localhost:8000/generate';
 
-// ====== Modal ======
-function ensureModal() {
-  let overlay = document.getElementById("mg-overlay");
-  if (!overlay) {
-    overlay = document.createElement("div");
-    overlay.id = "mg-overlay";
-    overlay.innerHTML = `
-      <div class="mg-modal" role="dialog" aria-modal="true" aria-label="Resultado">
-        <button class="mg-x" id="mg-close" aria-label="Cerrar">×</button>
-        <div class="mg-content" id="mg-content"></div>
+// Get DOM elements
+const inputField = document.getElementById('moleculas-input');
+const generateBtn = document.getElementById('generar');
+const responseSection = document.getElementById('respuesta');
+
+// Saved molecules array
+let savedMolecules = [];
+
+// Create notification system
+function createNotification(message, type = 'info', duration = 3000) {
+  const notification = document.createElement('div');
+  notification.className = `notification ${type}`;
+  notification.innerHTML = `
+    <div class="notification-content">
+      <span class="notification-icon">
+        ${type === 'success' ? '✓' : type === 'error' ? '⚠' : 'ℹ'}
+      </span>
+      <span class="notification-message">${message}</span>
+      <button class="notification-close" onclick="this.parentElement.parentElement.remove()">×</button>
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  // Auto remove after duration
+  setTimeout(() => {
+    if (notification.parentNode) {
+      notification.classList.add('fade-out');
+      setTimeout(() => notification.remove(), 300);
+    }
+  }, duration);
+  
+  return notification;
+}
+
+// Enhanced loading animation
+function showLoadingAnimation() {
+  return `
+    <div class="loading-container">
+      <div class="loading-card">
+        <div class="loading-animation">
+          <div class="dna-helix">
+            <div class="dna-strand strand-1"></div>
+            <div class="dna-strand strand-2"></div>
+            <div class="dna-base base-1"></div>
+            <div class="dna-base base-2"></div>
+            <div class="dna-base base-3"></div>
+            <div class="dna-base base-4"></div>
+          </div>
+        </div>
+        <div class="loading-text">
+          <h3>Generando Molécula...</h3>
+          <p>Analizando estructura SMILES</p>
+          <div class="loading-dots">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
       </div>
-    `;
-    document.body.appendChild(overlay);
+    </div>
+  `;
+}
 
-    overlay.addEventListener("click", (e) => {
-      const modal = overlay.querySelector(".mg-modal");
-      if (e.target.id === "mg-close" || !modal.contains(e.target)) hideModal();
+// Function to call the API with enhanced UI
+async function generateMolecule(inputSmiles) {
+  try {
+    // Disable button during generation
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Generando...';
+    
+    // Show enhanced loading animation
+    responseSection.innerHTML = showLoadingAnimation();
+    responseSection.style.display = 'block';
+    
+    // Add entrance animation
+    setTimeout(() => {
+      responseSection.classList.add('fade-in');
+    }, 100);
+
+    // Make POST request to the API
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        input_text: inputSmiles
+      })
     });
-    window.addEventListener("keydown", (e) => { if (e.key === "Escape") hideModal(); });
+
+    // Check if response is successful
+    if (!response.ok) {
+      throw new Error(`Error ${response.status}: ${response.statusText}`);
+    }
+
+    // Parse JSON response
+    const data = await response.json();
+    
+    // Simulate processing time for better UX (minimum 1.5 seconds)
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    // Display the result with animation
+    displayResult(data, inputSmiles);
+    
+    // Show success notification
+    createNotification('¡Molécula generada exitosamente!', 'success');
+    
+  } catch (error) {
+    // Display error message
+    displayError(error.message);
+    
+    // Show error notification
+    createNotification(`Error: ${error.message}`, 'error', 5000);
+  } finally {
+    // Re-enable button
+    generateBtn.disabled = false;
+    generateBtn.textContent = 'Generar';
   }
-  return overlay;
 }
 
-function mountInBox(html) {
-  const overlay = ensureModal();
-  overlay.querySelector("#mg-content").innerHTML = html;
-  overlay.classList.add("show");
-  document.body.style.overflow = "hidden";
-}
-
-function hideModal() {
-  const overlay = document.getElementById("mg-overlay");
-  if (overlay) overlay.classList.remove("show");
-  document.body.style.overflow = "";
-}
-
-function showLoading() {
-  mountInBox(`
-    <div class="mg-loader-wrap atom-loader">
-      <div class="atom">
-        <div class="orbit orbit1"><span class="electron"></span></div>
-        <div class="orbit orbit2"><span class="electron"></span></div>
-        <div class="orbit orbit3"><span class="electron"></span></div>
-        <div class="nucleus"></div>
-      </div>
-      <p class="mg-loader-text">
-        Generando molécula
-        <span class="mg-dot"></span><span class="mg-dot"></span><span class="mg-dot"></span>
-      </p>
-    </div>
-  `);
-}
-
-// ====== SMILES ======
-function isLikelySmiles(str) {
-  if (!str) return false;
-  const s = str.trim();
-  if (!s || /\s/.test(s)) return false;
-  const balanced = (txt, open, close) => {
-    let c = 0;
-    for (const ch of txt) {
-      if (ch === open) c++;
-      else if (ch === close) { c--; if (c < 0) return false; }
-    }
-    return c === 0;
-  };
-  if (!balanced(s, '(', ')')) return false;
-  if (!balanced(s, '[', ']')) return false;
-
-  let i = 0;
-  const L = s.length;
-  const isDigit = ch => ch >= '0' && ch <= '9';
-  const bondChars = new Set(['-', '=', '#', '/', '\\', '.']);
-  const aromatic = new Set(['b','c','n','o','p','s']);
-  const organicSingle = new Set(['B','C','N','O','P','S','F','I']);
-  while (i < L) {
-    const ch = s[i];
-    if (ch === '(' || ch === ')') { i++; continue; }
-    if (bondChars.has(ch)) { i++; continue; }
-    if (isDigit(ch)) { i++; continue; }
-    if (ch === '%' && i + 2 < L && isDigit(s[i+1]) && isDigit(s[i+2])) { i += 3; continue; }
-    if (ch === '[') {
-      const j = s.indexOf(']', i + 1);
-      if (j === -1) return false;
-      const inside = s.slice(i + 1, j);
-      if (!/^[A-Za-z0-9@+\-\.=:#\\/%,]*$/.test(inside)) return false;
-      i = j + 1; continue;
-    }
-    if (i + 1 < L) {
-      const two = s.slice(i, i + 2);
-      if (two === 'Cl' || two === 'Br' || two === 'as' || two === 'se') { i += 2; continue; }
-    }
-    if (aromatic.has(ch) || organicSingle.has(ch)) { i++; continue; }
-    if (/[A-Z]/.test(ch)) return false;
-    return false;
-  }
-  return true;
-}
-
-// ====== Mutación ======
-function mutateSmilesConservatively(smiles) {
-  const s = smiles.trim();
-  if (!s) return s;
-  const isLetter = (ch) => /[A-Za-z]/.test(ch);
-  const tokenLenAt = (txt, i) => (txt.slice(i, i + 2) === "Cl" || txt.slice(i, i + 2) === "Br") ? 2 : 1;
-  let i = 0, inBracket = false;
-  while (i < s.length) {
-    const ch = s[i];
-    if (ch === "[") inBracket = true;
-    if (ch === "]") inBracket = false;
-    if (!inBracket && isLetter(ch)) {
-      const len = tokenLenAt(s, i);
-      const insertPos = i + len;
-      return s.slice(0, insertPos) + "(C)" + s.slice(insertPos);
-    }
-    i++;
-  }
-  return s + "C";
-}
-
-// ====== Random fallback ======
-function randomResult(smiles) {
-  const rnd = (min, max, d=2) => (Math.random()*(max-min)+min).toFixed(d);
-  const bool = () => Math.random() < 0.5;
-  const tox = ["baja", "media", "alta"][Math.floor(Math.random()*3)];
-  const mutated = mutateSmilesConservatively(smiles);
-  return {
-    ok: true,
-    data: {
-      smiles: mutated,
-      peso_molecular: Number(rnd(100, 800)),
-      prediccion_bioactiva: Number(rnd(0, 1, 3)),
-      lipinski_ok: bool(),
-      toxicidad_potencial: tox
-    }
-  };
-}
-
-// ====== Render ======
-function renderError(msg){
-  mountInBox(`
-    <div class="mg-card">
-      <h3 class="mg-title">Error</h3>
-      <p>${esc(msg)}</p>
-    </div>
-  `);
-}
-
-function renderSuccess(original, json){
-  const d = json?.data ?? {};
-  const tox = (d.toxicidad_potencial || "").toLowerCase();
-  const toxClass = tox === "alta" ? "danger" : tox === "media" ? "warn" : "ok";
-  const lipBadge = d.lipinski_ok ? `<span class="badge ok">Lipinski OK</span>` : `<span class="badge warn">Lipinski no cumple</span>`;
-  const toxBadge = `<span class="badge ${toxClass}">Toxicidad: ${esc(d.toxicidad_potencial ?? "?")}</span>`;
-  mountInBox(`
-    <div class="mg-card">
-      <h3 class="mg-title">Molécula generada</h3>
-      <div class="mg-grid">
-        <div class="mg-label">SMILES original</div>
-        <div class="mg-value">
-          <span class="mg-code"><code id="mg-ori">${esc(original)}</code>
-            <button class="mg-copy" data-copy="#mg-ori">copiar</button>
-          </span>
+// Enhanced result display function
+function displayResult(data, inputSmiles) {
+  const { raw_tokens_string, smiles_postprocesado } = data;
+  
+  responseSection.innerHTML = `
+    <div class="resultado-notification">
+      <div class="resultado-header">
+        <div class="resultado-icon">🧬</div>
+        <div class="resultado-title">
+          <h2>Generación Completada</h2>
+          <p class="resultado-subtitle">Molécula procesada correctamente</p>
         </div>
-        <div class="mg-label">SMILES nuevo</div>
-        <div class="mg-value">
-          <span class="mg-code"><code id="mg-nvo">${esc(d.smiles ?? "(sin dato)")}</code>
-            <button class="mg-copy" data-copy="#mg-nvo">copiar</button>
-          </span>
-        </div>
-        <div class="mg-label">Peso molecular</div>
-        <div class="mg-value">${esc(d.peso_molecular ?? "(?)")}</div>
-        <div class="mg-label">Predicción bioactiva</div>
-        <div class="mg-value">${esc(d.prediccion_bioactiva ?? "(?)")}</div>
+        <button class="close-btn" onclick="closeResult()">×</button>
       </div>
-      <div class="mg-sep"></div>
-      <div class="mg-badges">
-        ${lipBadge}
-        ${toxBadge}
+      
+      <div class="resultado-body">
+        <div class="resultado-grid">
+          <div class="resultado-card input-card">
+            <div class="card-header">
+              <span class="card-icon">📝</span>
+              <h3>Input Original</h3>
+            </div>
+            <div class="smiles-display">
+              <code>${inputSmiles}</code>
+            </div>
+          </div>
+          
+          <div class="resultado-card raw-card">
+            <div class="card-header">
+              <span class="card-icon">🔤</span>
+              <h3>Raw Tokens</h3>
+            </div>
+            <div class="smiles-display">
+              <code>${raw_tokens_string}</code>
+            </div>
+          </div>
+          
+          <div class="resultado-card final-card highlight">
+            <div class="card-header">
+              <span class="card-icon">✨</span>
+              <h3>SMILES Final</h3>
+            </div>
+            <div class="smiles-display final">
+              <code>${smiles_postprocesado}</code>
+            </div>
+            <div class="card-badge">Resultado</div>
+          </div>
+        </div>
+        
+        <div class="resultado-actions">
+          <button class="action-btn primary" onclick="saveMolecule('${smiles_postprocesado}')">
+            <span class="btn-icon">💾</span>
+            Guardar Molécula
+          </button>
+          <button class="action-btn secondary" onclick="copyToClipboard('${smiles_postprocesado}')">
+            <span class="btn-icon">📋</span>
+            Copiar SMILES
+          </button>
+          <button class="action-btn tertiary" onclick="resetForm()">
+            <span class="btn-icon">🔄</span>
+            Nueva Generación
+          </button>
+        </div>
       </div>
     </div>
-  `);
+  `;
+  
+  // Add entrance animation
+  setTimeout(() => {
+    const notification = document.querySelector('.resultado-notification');
+    notification.classList.add('slide-in');
+  }, 100);
 }
 
-// ====== Evento principal ======
-boton.addEventListener("click", async () => {
-  const smiles = (input.value || "").trim();
-  if (!isLikelySmiles(smiles)) {
-    renderError("Por favor, ingresá una molécula en formato SMILES.");
+// Enhanced error display function
+function displayError(errorMessage) {
+  responseSection.innerHTML = `
+    <div class="error-notification">
+      <div class="error-header">
+        <div class="error-icon">⚠️</div>
+        <div class="error-title">
+          <h2>Error en la Generación</h2>
+          <p class="error-subtitle">No se pudo procesar la molécula</p>
+        </div>
+        <button class="close-btn" onclick="closeResult()">×</button>
+      </div>
+      
+      <div class="error-body">
+        <div class="error-details">
+          <div class="error-message-card">
+            <h3>Detalles del Error:</h3>
+            <p class="error-text">${errorMessage}</p>
+          </div>
+          
+          <div class="error-suggestions">
+            <h3>Sugerencias:</h3>
+            <ul>
+              <li>Verifica que el servidor esté ejecutándose en localhost:8000</li>
+              <li>Asegúrate de que el formato SMILES sea correcto</li>
+              <li>Revisa tu conexión de red</li>
+              <li>Intenta con una molécula más simple (ej: "C" para metano)</li>
+            </ul>
+          </div>
+        </div>
+        
+        <div class="error-actions">
+          <button class="action-btn primary" onclick="resetForm()">
+            <span class="btn-icon">🔄</span>
+            Reintentar
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Add entrance animation
+  setTimeout(() => {
+    const notification = document.querySelector('.error-notification');
+    notification.classList.add('slide-in');
+  }, 100);
+}
+
+// Function to close result window
+function closeResult() {
+  const notification = document.querySelector('.resultado-notification, .error-notification');
+  if (notification) {
+    notification.classList.add('slide-out');
+    setTimeout(() => {
+      responseSection.style.display = 'none';
+      responseSection.classList.remove('fade-in');
+    }, 300);
+  }
+}
+
+// Enhanced save molecule function
+function saveMolecule(smiles) {
+  if (!savedMolecules.includes(smiles)) {
+    savedMolecules.push(smiles);
+    updateSavedMolecules();
+    createNotification('Molécula guardada correctamente', 'success');
+  } else {
+    createNotification('Esta molécula ya está guardada', 'info');
+  }
+}
+
+// Function to update saved molecules in sidebar
+function updateSavedMolecules() {
+  const sidebar = document.querySelector('.sidebar');
+  let savedList = document.getElementById('saved-list');
+  
+  if (!savedList) {
+    savedList = document.createElement('ul');
+    savedList.id = 'saved-list';
+    savedList.className = 'saved-list';
+    
+    const guardadasP = document.querySelector('.guardadas');
+    guardadasP.parentNode.insertBefore(savedList, guardadasP.nextSibling);
+  }
+  
+  savedList.innerHTML = savedMolecules.map((mol, index) => `
+    <li class="saved-item" onclick="loadMolecule('${mol}')">
+      <div class="saved-content">
+        <span class="saved-smiles" title="${mol}">${mol.substring(0, 12)}${mol.length > 12 ? '...' : ''}</span>
+        <span class="saved-date">${new Date().toLocaleDateString()}</span>
+      </div>
+      <button class="btn-delete" onclick="event.stopPropagation(); deleteMolecule(${index})" aria-label="Eliminar">×</button>
+    </li>
+  `).join('');
+}
+
+// Function to load saved molecule
+function loadMolecule(smiles) {
+  inputField.value = smiles;
+  createNotification('Molécula cargada en el input', 'info');
+}
+
+// Function to delete saved molecule
+function deleteMolecule(index) {
+  savedMolecules.splice(index, 1);
+  updateSavedMolecules();
+  createNotification('Molécula eliminada', 'info');
+}
+
+// Enhanced copy to clipboard function
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    createNotification('SMILES copiado al portapapeles', 'success');
+  }).catch(err => {
+    console.error('Error al copiar:', err);
+    createNotification('Error al copiar al portapapeles', 'error');
+  });
+}
+
+// Function to reset form
+function resetForm() {
+  inputField.value = '';
+  closeResult();
+  inputField.focus();
+}
+
+// Event listener for generate button
+generateBtn.addEventListener('click', () => {
+  const inputValue = inputField.value.trim();
+  
+  if (inputValue === '') {
+    createNotification('Por favor, ingrese una molécula SMILES', 'error');
+    inputField.focus();
     return;
   }
-  showLoading();
-  boton.disabled = true;
-  input.disabled = true;
-  const start = performance.now();
-  try {
-    console.log("Enviando solicitud para SMILES:", smiles);
-    const resp = await fetch("https://molgenweb-ynuo.onrender.com/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ smiles })
-    });
-    console.log(resp);
-    let json = null;
-    try { json = await resp.json(); } catch { json = null; }
-    const ok = resp.ok && json && json.ok !== false;
-    const payload = ok ? json : randomResult(smiles);
-    const elapsed = performance.now() - start;
-    if (elapsed < 500) await new Promise(r => setTimeout(r, 500 - elapsed));
-    renderSuccess(smiles, payload);
-  } catch {
-    const fake = randomResult(smiles);
-    renderSuccess(smiles, fake);
-  } finally {
-    boton.disabled = false;
-    input.disabled = false;
+  
+  generateMolecule(inputValue);
+});
+
+// Event listener for Enter key
+inputField.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    generateBtn.click();
   }
 });
-input.addEventListener("keydown", (e) => { if (e.key === "Enter") boton.click(); });
 
-// ====== Copiar ======
-document.addEventListener("click", (e) => {
-  const btn = e.target.closest(".mg-copy");
-  if (!btn) return;
-  const sel = btn.getAttribute("data-copy");
-  const el = sel ? document.querySelector(sel) : null;
-  if (!el) return;
-  const txt = el.textContent.trim();
-  navigator.clipboard.writeText(txt).then(() => {
-    const old = btn.textContent;
-    btn.textContent = "copiado";
-    setTimeout(() => (btn.textContent = old), 900);
-  });
-  // ====== Botones inferiores ======
-
-// Home: ir a home.html (o index.html#home si preferís volver al hero)
-document.getElementById("home-btn")?.addEventListener("click", (e) => {
-  e.preventDefault();
-  window.location.href = "home.html"; // cambia a "index.html#home" si querés
+// Initialize app
+document.addEventListener('DOMContentLoaded', () => {
+  inputField.focus();
+  createNotification('MolGenAI listo para generar moléculas', 'info', 2000);
 });
 
-// Info: ir directo a la sección "Contáctanos" de la landing
-document.getElementById("info-btn")?.addEventListener("click", (e) => {
-  e.preventDefault();
-  window.location.href = "index.html#contact";
-});
-
-});
-
-  
+// Make functions available globally
+window.saveMolecule = saveMolecule;
+window.deleteMolecule = deleteMolecule;
+window.loadMolecule = loadMolecule;
+window.copyToClipboard = copyToClipboard;
+window.resetForm = resetForm;
+window.closeResult = closeResult;

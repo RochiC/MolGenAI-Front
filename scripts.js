@@ -55,7 +55,7 @@ window.addEventListener("load", () => {
 });
 
 (() => {
-  const BASE_URL = "https://proyecto-25.vercel.app/all";
+  const BASE_URL = "http://localhost:8000";
   const moleculasInput = document.getElementById("moleculas-input");
   const botonGenerar = document.getElementById("generar");
 
