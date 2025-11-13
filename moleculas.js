@@ -326,37 +326,31 @@ function resetForm() {
 
 // Event listener for generate button
 generateBtn.addEventListener('click', () => {
-  if (inputValue === '') {
-  createNotification('Por favor, ingrese una molécula SMILES', 'error');
-  inputField.focus();
-  return;
-}
-const smilesRegex = /^[A-Za-z0-9@+\-=#%\\/\\(\\)\\[\\]\\.]*(\\*|)$/;
-if (!smilesRegex.test(inputValue)) {
-  createNotification('Por favor, ingrese un SMILES válido (por ejemplo: CCO, CC(=O)O, etc). Solo letras, números y símbolos químicos.', 'error');
-  inputField.focus();
-  return;
-}
-  
-  generateMolecule(inputValue);
-});
-
-// Event listener for Enter key
-inputField.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') {
-  generateBtn.addEventListener('click', () => {
-  const inputValue = inputField.value.trim(); // <- Esto es CLAVE
+  const inputValue = inputField.value.trim();
 
   if (inputValue === '') {
     createNotification('Por favor, ingrese una molécula SMILES', 'error');
     inputField.focus();
     return;
   }
-  // ... resto de tus validaciones y llamada a generateMolecule(inputValue)
+  const smilesRegex = /^[A-Za-z0-9@+\-=#%\/\\()\[\]\.\*]+$/;
+  if (!smilesRegex.test(inputValue)) {
+    createNotification('Por favor, ingrese un SMILES válido (por ejemplo: CCO, CC(=O)O, etc). Solo letras, números y símbolos químicos.', 'error');
+    inputField.focus();
+    return;
+  }
+
+  generateMolecule(inputValue);
 });
 
+// El listener de Enter sólo llama a generateBtn.click()
+inputField.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    generateBtn.click();
   }
 });
+
+
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
