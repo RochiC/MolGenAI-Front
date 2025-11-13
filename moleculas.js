@@ -344,7 +344,11 @@ if (!smilesRegex.test(inputValue)) {
 // Event listener for Enter key
 inputField.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') {
-    generateBtn.click();
+    generateBtn.addEventListener('click', () => {
+  const inputValue = inputField.value.trim(); // ESTA LÍNEA DEFINE inputValue
+  // ...resto del código
+});
+
   }
 });
 
