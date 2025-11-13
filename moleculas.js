@@ -344,9 +344,15 @@ if (!smilesRegex.test(inputValue)) {
 // Event listener for Enter key
 inputField.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') {
-    generateBtn.addEventListener('click', () => {
-  const inputValue = inputField.value.trim(); // ESTA LÍNEA DEFINE inputValue
-  // ...resto del código
+  generateBtn.addEventListener('click', () => {
+  const inputValue = inputField.value.trim(); // <- Esto es CLAVE
+
+  if (inputValue === '') {
+    createNotification('Por favor, ingrese una molécula SMILES', 'error');
+    inputField.focus();
+    return;
+  }
+  // ... resto de tus validaciones y llamada a generateMolecule(inputValue)
 });
 
   }
