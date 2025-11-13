@@ -326,13 +326,17 @@ function resetForm() {
 
 // Event listener for generate button
 generateBtn.addEventListener('click', () => {
-  const inputValue = inputField.value.trim();
-  
   if (inputValue === '') {
-    createNotification('Por favor, ingrese una molécula SMILES', 'error');
-    inputField.focus();
-    return;
-  }
+  createNotification('Por favor, ingrese una molécula SMILES', 'error');
+  inputField.focus();
+  return;
+}
+const smilesRegex = /^[A-Za-z0-9@+\-=#%\\/\\(\\)\\[\\]\\.]*(\\*|)$/;
+if (!smilesRegex.test(inputValue)) {
+  createNotification('Por favor, ingrese un SMILES válido (por ejemplo: CCO, CC(=O)O, etc). Solo letras, números y símbolos químicos.', 'error');
+  inputField.focus();
+  return;
+}
   
   generateMolecule(inputValue);
 });
