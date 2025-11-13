@@ -70,42 +70,59 @@ function showLoadingAnimation() {
 // Function to call the API with enhanced UI
 async function generateMolecule(inputSmiles) {
   try {
-    // ... igual que antes
+    // Disable button during generation
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Generando...';
+    
+    // Show enhanced loading animation
+    responseSection.innerHTML = showLoadingAnimation();
+    responseSection.style.display = 'block';
+    
+    // Add entrance animation
+    setTimeout(() => {
+      responseSection.classList.add('fade-in');
+    }, 100);
+
+    // Make POST request to the API
     const response = await fetch(API_URL, {
       method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    input_text: inputSmiles
-  })
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        input_text: inputSmiles
+      })
     });
 
+    // Check if response is successful
     if (!response.ok) {
-      // Intenta parsear el JSON para error 422
-      let errMsg = `Error ${response.status}: ${response.statusText}`;
-      try {
-        const errJson = await response.json();
-        if (errJson.detail && errJson.detail.message) {
-          errMsg = errJson.detail.message;
-        } else if (errJson.detail && typeof errJson.detail === "string") {
-          errMsg = errJson.detail;
-        }
-      } catch {}
-      throw new Error(errMsg);
+      throw new Error(`Error ${response.status}: ${response.statusText}`);
     }
 
+    // Parse JSON response
     const data = await response.json();
-    // ... igual
+    
+    // Simulate processing time for better UX (minimum 1.5 seconds)
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    // Display the result with animation
+    displayResult(data, inputSmiles);
+    
+    // Show success notification
+    createNotification('¡Molécula generada exitosamente!', 'success');
+    
   } catch (error) {
-    displayError(error.message); // mostrará tu mensaje personalizado
-    createNotification(error.message, 'error', 5000);
+    // Display error message
+    displayError(error.message);
+    
+    // Show error notification
+    createNotification(`Error: ${error.message}`, 'error', 5000);
   } finally {
+    // Re-enable button
     generateBtn.disabled = false;
     generateBtn.textContent = 'Generar';
   }
 }
-
 
 // Enhanced result display function
 function displayResult(data, inputSmiles) {
